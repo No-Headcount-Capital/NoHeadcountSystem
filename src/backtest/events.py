@@ -1,3 +1,5 @@
+"""Typed event payloads used by the backtest loop and strategy callbacks."""
+
 from numba import float64, types
 from numba.experimental import jitclass
 
@@ -36,6 +38,8 @@ open_signal_spec = [
 
 @jitclass(open_signal_spec)
 class OpenSignal:
+    """Signal event emitted at bar open when signal_flag is active."""
+
     def __init__(self, open, signal, extras):
         self.open = open
         self.signal = signal
@@ -44,6 +48,8 @@ class OpenSignal:
 
 @jitclass(kline_spec)
 class Kline:
+    """Full OHLC bar event passed to on_tick callbacks."""
+
     def __init__(self, open, high, low, close, signal, signal_flag, extras):
         self.open = open
         self.high = high
@@ -60,6 +66,8 @@ class Kline:
 
 @jitclass(trade_spec)
 class Trade:
+    """Simple trade record container (price, quantity, side)."""
+
     def __init__(self, price, quantity, side):
         self.price = price
         self.quantity = quantity
@@ -76,6 +84,8 @@ class Trade:
 
 @jitclass(orderbook_spec)
 class Orderbook:
+    """Compact order book snapshot wrapper for best bid/ask access."""
+
     def __init__(self, bids, asks):
         self.bids = bids
         self.asks = asks
@@ -99,6 +109,8 @@ class Orderbook:
 
 @jitclass(order_spec)
 class Order:
+    """Order event returned by the exchange when an order state changes."""
+
     def __init__(self, price, quantity, id, side, type="LIMIT"):
         self.price = price
         self.quantity = quantity

@@ -1,3 +1,5 @@
+"""Kline-level matching engine with position and PnL accounting."""
+
 import numpy as np
 from numba import float64, int64, typed, types
 from numba.experimental import jitclass
@@ -25,6 +27,8 @@ kline_exchange_spec = [
 
 @jitclass(kline_exchange_spec)
 class KlineExchange:
+    """In-memory exchange simulator for market/limit orders on bar data."""
+
     def __init__(self, maker_commission, taker_commission, balance, price_tick, max_orders):
         self.maker_commission = maker_commission
         self.taker_commission = taker_commission
@@ -58,6 +62,7 @@ class KlineExchange:
         return round(price / self.price_tick) * self.price_tick
 
     def _update_trade(self, price, trade_size):
+        # Update average cost for adds, realize PnL for closes/reversals.
         new_size = trade_size + self.position
         if abs(self.position) < 1e-9:
             self.cost_price = price
@@ -102,6 +107,7 @@ class KlineExchange:
     def place_limit_order(self, price, quantity):
         if quantity == 0:
             return False
+        # Aggressive limits cross the reference price and execute as taker trades.
         if quantity > 0 and price > self.reference_price:
             self.place_market_order(quantity)
             return -1
@@ -130,6 +136,7 @@ class KlineExchange:
         return price >= order_price
 
     def match_limit_order(self, price):
+        # Scan all active orders and fill those triggered by the current bar price.
         flag = False
         filled_order = None
         for index in range(self.max_orders):

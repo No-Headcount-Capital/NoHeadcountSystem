@@ -1,3 +1,5 @@
+"""Backtest event loop that wires strategy callbacks and exchange matching."""
+
 import numpy as np
 from numba import float64, int64, njit
 
@@ -9,6 +11,7 @@ _compiled = None
 
 
 def bind_and_compile_kline_strategy(defined_strategy_type):
+    """Bind a concrete strategy jitclass and compile the njit backtest function once."""
     global _compiled
     if _compiled is not None:
         return _compiled
@@ -38,6 +41,7 @@ def bind_and_compile_kline_strategy(defined_strategy_type):
         price_tick,
         max_orders,
     ):
+        # One exchange instance is reused across all bars for continuous state.
         exchange = KlineExchange(maker_commission, taker_commission, balance, price_tick, max_orders)
         pnls = np.zeros(int64(np.sum(signal_flags)), dtype=np.float64)
         count = 0
@@ -82,6 +86,7 @@ def kline_backtest(
     price_tick,
     max_orders,
 ):
+    """Run the compiled kline backtest function."""
     if _compiled is None:
         raise RuntimeError("Call bind_and_compile_kline_strategy() first.")
     return _compiled(

@@ -1,3 +1,5 @@
+"""Convenience entrypoint for binding a strategy and running kline backtests."""
+
 from .loop import bind_and_compile_kline_strategy, kline_backtest
 
 
@@ -16,6 +18,7 @@ def run_kline_backtest(
     price_tick,
     max_orders,
 ):
+    """Compile strategy type if needed and execute the backtest loop."""
     bind_and_compile_kline_strategy(strategy)
     return kline_backtest(
         strategy,

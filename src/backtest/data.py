@@ -1,3 +1,5 @@
+"""Order book utilities for preprocessing and reshaping Bybit depth snapshots."""
+
 import numpy as np
 from numba import njit, types
 from numba.experimental import jitclass
@@ -8,6 +10,7 @@ LEVEL = 20
 
 @njit
 def numba_bisect_left(a, x):
+    """Return the insertion index for x in a sorted list."""
     lo = 0
     hi = len(a)
     while lo < hi:
@@ -21,6 +24,7 @@ def numba_bisect_left(a, x):
 
 @njit
 def numba_insort(a, x):
+    """Insert x into sorted list a while keeping ascending order."""
     idx = numba_bisect_left(a, x)
     a.insert(idx, x)
 
@@ -43,6 +47,8 @@ orderbook_dt = np.dtype(
 
 @jitclass(orderbook_spec)
 class NumbaOrderBook:
+    """Numba-friendly order book with sorted price levels for fast top-N access."""
+
     def __init__(self):
         self.bids = Dict.empty(key_type=types.float64, value_type=types.float64)
         self.asks = Dict.empty(key_type=types.float64, value_type=types.float64)
@@ -83,6 +89,7 @@ class NumbaOrderBook:
                     numba_insort(sorted_list, price)
 
     def get_top_levels(self, side, n=100):
+        # Bids are returned in descending price; asks in ascending price.
         sorted_prices = self._sorted_bids if side == "bid" else self._sorted_asks
         target_dict = self.bids if side == "bid" else self.asks
 
@@ -104,6 +111,8 @@ class NumbaOrderBook:
 
 
 class BybitOrderBook:
+    """Thin adapter that converts Python inputs into numba typed containers."""
+
     def __init__(self):
         self.core = NumbaOrderBook()
 
@@ -137,6 +146,7 @@ class BybitOrderBook:
 
 
 def bybit_orderbook_process(df):
+    """Convert incremental Bybit updates into fixed-shape depth tensors by timestamp."""
     orderbook = BybitOrderBook()
     for i in range(len(df.loc[0, "data"]["a"])):
         df.loc[0, "data"]["a"][i] = [float(df.loc[0, "data"]["a"][i][0]), float(df.loc[0, "data"]["a"][i][1])]
@@ -166,6 +176,7 @@ def bybit_orderbook_process(df):
 
 
 def bybit_orderbook_transpose(orderbook_data):
+    """Transpose depth tensor into (time, side, level, fields) layout."""
     orderbook_data = np.array([orderbook_data["bid"], orderbook_data["ask"]], dtype=np.float64)
     orderbook_data = np.transpose(orderbook_data, (1, 0, 2, 3))
     return orderbook_data
