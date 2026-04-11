@@ -13,7 +13,9 @@ from src.infrastructure.event_engine import EventEngine
 from src.infrastructure.events import EVENT_ORDER, EVENT_TICK, EVENT_TRADE, Event
 from src.infrastructure.gateway import BinanceTestnetGateway, SimulatedGateway
 from src.infrastructure.oms import OrderManager
-from src.risk.manager import RiskConfig, RiskManager
+from src.risk.analytics import RiskAnalytics, RiskAnalyticsConfig
+from src.risk.policy import RiskPolicy
+from src.risk.runtime_manager import RuntimeRiskManager
 from src.strategies.cep import CEPEngine
 from src.strategies.grid import GridStrategy
 from src.strategies.pulse_buy import PulseBuyStrategy
@@ -63,6 +65,16 @@ def env_float(name: str, default: float) -> float:
         return default
 
 
+def env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
 def resolve_mode() -> str:
     mode = os.getenv("TRADING_MODE", "").strip().upper()
     if mode:
@@ -81,8 +93,27 @@ def build_system() -> tuple[EventEngine, SimulatedGateway | BinanceTestnetGatewa
         gateway = BinanceTestnetGateway(event_engine)
     else:
         gateway = SimulatedGateway(event_engine)
-    risk_manager = RiskManager(RiskConfig(max_order_volume=0.01, max_symbol_position=0.05))
+    risk_policy = RiskPolicy(
+        max_order_volume=env_float("RISK_MAX_ORDER_VOLUME", 0.01),
+        max_symbol_position=env_float("RISK_MAX_SYMBOL_POSITION", 0.05),
+        max_strategy_order_volume=env_float("RISK_MAX_STRATEGY_ORDER_VOLUME", 0.01),
+        max_strategy_position=env_float("RISK_MAX_STRATEGY_POSITION", 0.05),
+        max_notional_per_order=env_float("RISK_MAX_NOTIONAL_PER_ORDER", 0.0),
+        max_total_notional=env_float("RISK_MAX_TOTAL_NOTIONAL", 0.0),
+        max_orders_per_minute=env_int("RISK_MAX_ORDERS_PER_MINUTE", 0),
+        max_consecutive_rejections=env_int("RISK_MAX_CONSECUTIVE_REJECTIONS", 0),
+        cooldown_seconds=env_float("RISK_COOLDOWN_SECONDS", 60.0),
+        enable_kill_switch=bool_env("RISK_ENABLE_KILL_SWITCH", True),
+        enable_auto_kill_switch=bool_env("RISK_ENABLE_AUTO_KILL_SWITCH", False),
+        max_drawdown=env_float("RISK_MAX_DRAWDOWN", 0.0),
+        initial_equity=env_float("RISK_INITIAL_EQUITY", 0.0),
+    )
+    risk_manager = RuntimeRiskManager(
+        policy=risk_policy,
+        analytics_level2_scale=env_float("RISK_LEVEL2_SCALE", 0.5),
+    )
     OrderManager(event_engine=event_engine, gateway=gateway, risk_manager=risk_manager)
+    register_risk_analytics(event_engine=event_engine, risk_manager=risk_manager)
     cep_engine = CEPEngine()
     return event_engine, gateway, cep_engine
 
@@ -123,6 +154,52 @@ def register_log_handlers(event_engine: EventEngine) -> None:
     event_engine.register(EVENT_TICK, on_tick)
     event_engine.register(EVENT_ORDER, on_order)
     event_engine.register(EVENT_TRADE, on_trade)
+
+
+def register_risk_analytics(event_engine: EventEngine, risk_manager: RuntimeRiskManager) -> None:
+    enabled = bool_env("RISK_ANALYTICS_ENABLE", True)
+    if not enabled:
+        return
+    analytics = RiskAnalytics(
+        RiskAnalyticsConfig(
+            bar_minutes=env_int("RISK_ANALYTICS_BAR_MINUTES", 10),
+            recompute_minutes=env_int("RISK_ANALYTICS_RECOMPUTE_MINUTES", 10),
+            history_points=env_int("RISK_ANALYTICS_HISTORY_POINTS", 2880),
+            level1_var_ratio=env_float("RISK_ANALYTICS_LEVEL1_VAR_RATIO", 0.03),
+            level2_cvar_ratio=env_float("RISK_ANALYTICS_LEVEL2_CVAR_RATIO", 0.05),
+            level3_stress_ratio=env_float("RISK_ANALYTICS_LEVEL3_STRESS_RATIO", 0.10),
+            upgrade_confirmations=env_int("RISK_ANALYTICS_UPGRADE_CONFIRMATIONS", 3),
+            downgrade_confirmations=env_int("RISK_ANALYTICS_DOWNGRADE_CONFIRMATIONS", 3),
+            hysteresis_ratio=env_float("RISK_ANALYTICS_HYSTERESIS_RATIO", 0.8),
+        )
+    )
+    fallback_equity = env_float("RISK_ANALYTICS_EQUITY_FALLBACK", 10000.0)
+    if risk_manager.get_equity() <= 0 and fallback_equity > 0:
+        risk_manager.mark_equity(fallback_equity)
+
+    def on_tick_for_analytics(event: Event) -> None:
+        tick = event.data
+        analytics.on_tick(tick)
+        equity = risk_manager.get_equity()
+        metrics = analytics.compute_if_due(
+            positions_by_vt_symbol=risk_manager.get_symbol_positions(),
+            equity=equity,
+        )
+        if not metrics:
+            return
+        risk_manager.apply_analytics_metrics(metrics)
+        var95 = metrics.var_ratios.get("95", 0.0)
+        cvar95 = metrics.cvar_ratios.get("95", 0.0)
+        rv_24h = metrics.volatility.get("rv_144_bars", 0.0)
+        print(
+            "[RISK_ANALYTICS] "
+            f"level={metrics.level} reason={metrics.level_reason} "
+            f"var95={var95:.4f} cvar95={cvar95:.4f} "
+            f"stress={metrics.worst_stress_name}:{metrics.worst_stress_loss_ratio:.4f} "
+            f"rv24h={rv_24h:.4f} bars={metrics.bars_used}"
+        )
+
+    event_engine.register(EVENT_TICK, on_tick_for_analytics)
 
 
 def start_simulated_stream(gateway: SimulatedGateway, symbol: str) -> tuple[Thread, StopEvent]:
