@@ -2,8 +2,8 @@ import requests
 
 # 替换为你的 Clash 端口（默认7890）
 proxies = {
-    'http': 'http://127.0.0.1:7890',
-    'https': 'http://127.0.0.1:7890'
+    'http': 'http://127.0.0.1:7897',
+    'https': 'http://127.0.0.1:7897'
 }
 
 # 测试访问币安测试网
