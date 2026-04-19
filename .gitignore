@@ -5,7 +5,15 @@ __pycache__/
 
 # C extensions
 *.so
-
+# Latex outputs
+*.fls
+*.aux
+*.nav
+*.out
+*.toc
+*.vrb
+*.snm
+report/slide.synctex(busy)
 # Distribution / packaging
 .Python
 build/

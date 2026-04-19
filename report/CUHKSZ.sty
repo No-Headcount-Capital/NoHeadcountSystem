@@ -1,0 +1,88 @@
+\mode<presentation>
+
+\newif\ifbeamer@secheader
+\beamer@secheaderfalse
+
+%\DeclareOptionBeamer{secheader}{\beamer@secheadertrue}
+\ProcessOptionsBeamer
+
+\useoutertheme[footline=authorinstitutetitle,subsection=false]{smoothbars}
+\makeatletter % [add curpage/total page at the bottom](http://tex.stackexchange.com/questions/100838/beamer-dresden-theme-miniframes-appeareance-and-frame-number-insertion)
+\newcommand{\frameofframes}{/}
+\newcommand{\setframeofframes}[1]{\renewcommand{\frameofframes}{#1}}
+\setbeamertemplate{footline} 
+  {%
+    \begin{beamercolorbox}[colsep=1.5pt]{upper separation line foot}
+    \end{beamercolorbox}
+    \begin{beamercolorbox}[ht=2.5ex,dp=1.125ex,%
+      leftskip=.3cm,rightskip=.3cm plus1fil]{author in head/foot}%
+      \leavevmode{\usebeamerfont{author in head/foot}\insertshortauthor}%
+      \hfill%
+      {\usebeamerfont{institute in head/foot}\usebeamercolor[fg]{institute in head/foot}\insertshortinstitute}%
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[ht=2.5ex,dp=1.125ex,%
+      leftskip=.3cm,rightskip=.3cm plus1fil]{title in head/foot}%
+      {\usebeamerfont{title in head/foot}\insertshorttitle}%
+      \hfill%
+      {\usebeamerfont{frame number}\usebeamercolor[fg]{frame number}\insertframenumber~\frameofframes~\inserttotalframenumber}
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[colsep=1.5pt]{lower separation line foot}
+    \end{beamercolorbox}
+  }
+\makeatother
+
+\useinnertheme{circles}
+
+%\useoutertheme{default}
+%\useinnertheme[shadow=true]{rounded}
+
+\xdefinecolor{cuhksz1}{rgb}{0.457,0.0585,0.42578}      %RGB(117,15,109)
+\xdefinecolor{cuhksz2}{rgb}{0.86328,0.63671875,0}      %RGB(221,163,0)
+\xdefinecolor{cuhksz3}{rgb}{0.953125,0.87109,0.6875}   %RGB(244,223,176)
+
+\setbeamercolor{footline}{bg=cuhksz1}
+\setbeamercolor{frametitle}{bg=cuhksz1,fg=cuhksz3}
+\setbeamercolor{title}{bg=cuhksz1}
+\setbeamerfont{frametitle}{size=\large}
+%\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{bibliography item}[text]
+\setbeamertemplate{caption}[numbered]
+
+\setbeamercolor{palette primary}{use=structure,fg=cuhksz2,bg=structure.fg}
+\setbeamercolor{palette secondary}{use=structure,fg=cuhksz2,bg=structure.fg!75!black}
+\setbeamercolor{palette tertiary}{use=structure,fg=cuhksz2,bg=structure.fg!50!black}
+\setbeamercolor{palette quaternary}{fg=cuhksz2,bg=structure.fg!50!black}
+%\setbeamercolor*{sidebar}{use=structure,bg=structure.fg}
+\setbeamercolor{titlelike}{parent=palette primary}
+
+%% try
+\setbeamercolor{block title}{bg=cuhksz1,fg=cuhksz3}
+\setbeamercolor*{block title example}{use={normal text,example text},bg=cuhksz3,fg=cuhksz1}
+\setbeamercolor{fine separation line}{}
+\setbeamercolor{item projected}{fg=cuhksz3}
+\setbeamercolor{palette sidebar primary}{use=normal text,fg=normal text.fg}
+\setbeamercolor{palette sidebar quaternary}{use=structure,fg=structure.fg}
+\setbeamercolor{palette sidebar secondary}{use=structure,fg=structure.fg}
+\setbeamercolor{palette sidebar tertiary}{use=normal text,fg=normal text.fg}
+%\setbeamercolor{palette sidebar quaternary}{fg=white}
+\setbeamercolor{section in sidebar}{fg=cuhksz2}
+\setbeamercolor{section in sidebar shaded}{fg=cuhksz3}
+\setbeamercolor{separation line}{}
+\setbeamercolor{sidebar}{bg=cuhksz1}
+\setbeamercolor{sidebar}{parent=palette primary}
+\setbeamercolor{structure}{fg=cuhksz1}
+\setbeamercolor{subsection in sidebar}{fg=cuhksz2}
+\setbeamercolor{subsection in sidebar shaded}{fg=cuhksz3}
+\AtBeginSection[]{
+	\begin{frame}
+		\tableofcontents[sectionstyle=show/shaded,subsectionstyle=show/shaded/hide,subsubsectionstyle=show/shaded/hide]
+	\end{frame}
+}
+\AtBeginSubsection[]{
+	\begin{frame}
+		\tableofcontents[sectionstyle=show/shaded,subsectionstyle=show/shaded/hide,subsubsectionstyle=show/shaded/hide]
+	\end{frame}
+}
+
+\mode
+<all>
