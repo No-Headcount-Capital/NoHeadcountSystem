@@ -1,6 +1,18 @@
 from datetime import datetime
 from queue import Empty, Queue
-from tkinter import BOTH, LEFT, RIGHT, TOP, X, Y, StringVar, Tk, Toplevel, ttk
+from tkinter import (
+    BOTH,
+    LEFT,
+    RIGHT,
+    TOP,
+    PanedWindow,
+    StringVar,
+    Tk,
+    Toplevel,
+    X,
+    Y,
+    ttk,
+)
 
 from src.infrastructure.event_engine import EventEngine
 from src.infrastructure.events import EVENT_ORDER, EVENT_TICK, EVENT_TRADE, Event
@@ -34,29 +46,67 @@ class OrderMonitorGUI:
         ttk.Label(top_bar, textvariable=self.order_count_var, width=16).pack(side=LEFT)
         ttk.Label(top_bar, textvariable=self.trade_count_var, width=16).pack(side=LEFT)
         ttk.Label(top_bar, textvariable=self.filled_count_var, width=18).pack(side=LEFT)
-        ttk.Label(top_bar, textvariable=self.rejected_count_var, width=16).pack(side=LEFT)
+        ttk.Label(top_bar, textvariable=self.rejected_count_var, width=16).pack(
+            side=LEFT
+        )
         ttk.Label(top_bar, textvariable=self.tick_count_var, width=16).pack(side=LEFT)
 
-        content = ttk.Panedwindow(self.root, orient="vertical")
+        content = ttk.Frame(self.root)
         content.pack(fill=BOTH, expand=True, padx=8, pady=(0, 8))
+
+        content.columnconfigure(0, weight=1)
+        content.rowconfigure(0, weight=3)
+        content.rowconfigure(1, weight=2)
+        content.rowconfigure(2, weight=2)
+        content.rowconfigure(3, weight=2)
 
         order_frame = ttk.Labelframe(content, text="订单监控")
         trade_frame = ttk.Labelframe(content, text="成交监控")
         tick_frame = ttk.Labelframe(content, text="Tick监控")
         log_frame = ttk.Labelframe(content, text="事件日志")
-        content.add(order_frame, weight=3)
-        content.add(trade_frame, weight=2)
-        content.add(tick_frame, weight=2)
-        content.add(log_frame, weight=2)
+
+        order_frame.grid(row=0, column=0, sticky="nsew", pady=2)
+        trade_frame.grid(row=1, column=0, sticky="nsew", pady=2)
+        tick_frame.grid(row=2, column=0, sticky="nsew", pady=2)
+        log_frame.grid(row=3, column=0, sticky="nsew", pady=2)
 
         self.order_table = self._create_table(
             order_frame,
-            ("order_id", "strategy", "symbol", "status", "price", "volume", "traded", "reason", "time"),
-            ("订单ID", "策略", "合约", "状态", "价格", "数量", "已成交", "拒单原因", "时间"),
+            (
+                "order_id",
+                "strategy",
+                "symbol",
+                "status",
+                "price",
+                "volume",
+                "traded",
+                "reason",
+                "time",
+            ),
+            (
+                "订单ID",
+                "策略",
+                "合约",
+                "状态",
+                "价格",
+                "数量",
+                "已成交",
+                "拒单原因",
+                "时间",
+            ),
         )
         self.trade_table = self._create_table(
             trade_frame,
-            ("trade_id", "order_id", "strategy", "symbol", "price", "volume", "direction", "time"),
+            (
+                "trade_id",
+                "order_id",
+                "strategy",
+                "symbol",
+                "price",
+                "volume",
+                "direction",
+                "time",
+            ),
             ("成交ID", "订单ID", "策略", "合约", "价格", "数量", "方向", "时间"),
         )
         self.tick_table = self._create_table(
@@ -67,17 +117,26 @@ class OrderMonitorGUI:
 
         log_container = ttk.Frame(log_frame)
         log_container.pack(fill=BOTH, expand=True, padx=4, pady=4)
-        self.log_text = ttk.Treeview(log_container, columns=("time", "event"), show="headings", height=6)
+        self.log_text = ttk.Treeview(
+            log_container, columns=("time", "event"), show="headings", height=6
+        )
         self.log_text.heading("time", text="时间")
         self.log_text.heading("event", text="日志")
         self.log_text.column("time", width=180, anchor="center")
         self.log_text.column("event", width=1000, anchor="w")
-        log_scroll = ttk.Scrollbar(log_container, orient="vertical", command=self.log_text.yview)
+        log_scroll = ttk.Scrollbar(
+            log_container, orient="vertical", command=self.log_text.yview
+        )
         self.log_text.configure(yscrollcommand=log_scroll.set)
         self.log_text.pack(side=LEFT, fill=BOTH, expand=True)
         log_scroll.pack(side=RIGHT, fill=Y)
 
-    def _create_table(self, parent: Toplevel | ttk.Labelframe, columns: tuple[str, ...], headings: tuple[str, ...]) -> ttk.Treeview:
+    def _create_table(
+        self,
+        parent: Toplevel | ttk.Labelframe,
+        columns: tuple[str, ...],
+        headings: tuple[str, ...],
+    ) -> ttk.Treeview:
         frame = ttk.Frame(parent)
         frame.pack(fill=BOTH, expand=True, padx=4, pady=4)
         table = ttk.Treeview(frame, columns=columns, show="headings", height=8)
@@ -165,7 +224,9 @@ class OrderMonitorGUI:
             self.trade_table.delete(self.trade_table.get_children()[-1])
         self._trade_count += 1
         self.trade_count_var.set(f"成交: {self._trade_count}")
-        self._append_log(f"TRADE {getattr(trade, 'trade_id')} {getattr(trade, 'direction').value}")
+        self._append_log(
+            f"TRADE {getattr(trade, 'trade_id')} {getattr(trade, 'direction').value}"
+        )
 
     def _render_tick(self, tick: object) -> None:
         values = (

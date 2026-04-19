@@ -1,6 +1,8 @@
+import logging
 import os
 import sys
 import time
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from threading import Event as StopEvent
 from threading import Thread
@@ -17,8 +19,36 @@ from src.risk.analytics import RiskAnalytics, RiskAnalyticsConfig
 from src.risk.policy import RiskPolicy
 from src.risk.runtime_manager import RuntimeRiskManager
 from src.strategies.cep import CEPEngine
+from src.strategies.dca import FeeAwareStatArbStrategy
 from src.strategies.grid import GridStrategy
 from src.strategies.pulse_buy import PulseBuyStrategy
+
+logger = logging.getLogger(__name__)
+
+
+def setup_logging():
+    log_dir = PROJECT_ROOT / "logs"
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "trading.log"
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    # 清除默认的 handlers 防止重复打印
+    if root_logger.handlers:
+        root_logger.handlers.clear()
+
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    file_handler = TimedRotatingFileHandler(
+        filename=log_file, when="midnight", interval=1, backupCount=7, encoding="utf-8"
+    )
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
 
 
 def load_env_file() -> None:
@@ -52,7 +82,7 @@ def load_env_file() -> None:
                 os.environ[key] = value
         loaded = True
     if not loaded:
-        print("未找到 .env 文件，将使用系统环境变量")
+        logger.info("未找到 .env 文件，将使用系统环境变量")
 
 
 def env_float(name: str, default: float) -> float:
@@ -86,7 +116,9 @@ def resolve_mode() -> str:
     return "SIM"
 
 
-def build_system() -> tuple[EventEngine, SimulatedGateway | BinanceTestnetGateway, CEPEngine]:
+def build_system() -> tuple[
+    EventEngine, SimulatedGateway | BinanceTestnetGateway, CEPEngine
+]:
     event_engine = EventEngine()
     mode = resolve_mode()
     if mode == "BINANCE":
@@ -132,21 +164,21 @@ def register_log_handlers(event_engine: EventEngine) -> None:
         if not show_tick:
             return
         tick = event.data
-        print(
+        logger.info(
             f"[TICK] symbol={tick.symbol} last={tick.last_price} "
             f"bid1={tick.bid_price_1} ask1={tick.ask_price_1} time={tick.datetime.isoformat()}"
         )
 
     def on_order(event: Event) -> None:
         order = event.data
-        print(
+        logger.info(
             f"[ORDER] strategy={order.strategy_name} id={order.order_id} status={order.status.value} "
             f"symbol={order.symbol} price={order.price} volume={order.volume} reject_reason={order.reject_reason}"
         )
 
     def on_trade(event: Event) -> None:
         trade = event.data
-        print(
+        logger.info(
             f"[TRADE] strategy={trade.strategy_name} trade_id={trade.trade_id} "
             f"symbol={trade.symbol} price={trade.price} volume={trade.volume}"
         )
@@ -156,7 +188,9 @@ def register_log_handlers(event_engine: EventEngine) -> None:
     event_engine.register(EVENT_TRADE, on_trade)
 
 
-def register_risk_analytics(event_engine: EventEngine, risk_manager: RuntimeRiskManager) -> None:
+def register_risk_analytics(
+    event_engine: EventEngine, risk_manager: RuntimeRiskManager
+) -> None:
     enabled = bool_env("RISK_ANALYTICS_ENABLE", True)
     if not enabled:
         return
@@ -169,7 +203,9 @@ def register_risk_analytics(event_engine: EventEngine, risk_manager: RuntimeRisk
             level2_cvar_ratio=env_float("RISK_ANALYTICS_LEVEL2_CVAR_RATIO", 0.05),
             level3_stress_ratio=env_float("RISK_ANALYTICS_LEVEL3_STRESS_RATIO", 0.10),
             upgrade_confirmations=env_int("RISK_ANALYTICS_UPGRADE_CONFIRMATIONS", 3),
-            downgrade_confirmations=env_int("RISK_ANALYTICS_DOWNGRADE_CONFIRMATIONS", 3),
+            downgrade_confirmations=env_int(
+                "RISK_ANALYTICS_DOWNGRADE_CONFIRMATIONS", 3
+            ),
             hysteresis_ratio=env_float("RISK_ANALYTICS_HYSTERESIS_RATIO", 0.8),
         )
     )
@@ -191,7 +227,7 @@ def register_risk_analytics(event_engine: EventEngine, risk_manager: RuntimeRisk
         var95 = metrics.var_ratios.get("95", 0.0)
         cvar95 = metrics.cvar_ratios.get("95", 0.0)
         rv_24h = metrics.volatility.get("rv_144_bars", 0.0)
-        print(
+        logger.info(
             "[RISK_ANALYTICS] "
             f"level={metrics.level} reason={metrics.level_reason} "
             f"var95={var95:.4f} cvar95={cvar95:.4f} "
@@ -202,7 +238,9 @@ def register_risk_analytics(event_engine: EventEngine, risk_manager: RuntimeRisk
     event_engine.register(EVENT_TICK, on_tick_for_analytics)
 
 
-def start_simulated_stream(gateway: SimulatedGateway, symbol: str) -> tuple[Thread, StopEvent]:
+def start_simulated_stream(
+    gateway: SimulatedGateway, symbol: str
+) -> tuple[Thread, StopEvent]:
     stop_signal = StopEvent()
     prices = [66720, 66700, 66680, 66660, 66640, 66600, 66580, 66650, 66740, 66820]
 
@@ -229,6 +267,19 @@ def build_strategy(event_engine: EventEngine, symbol: str, exchange_name: str):
             interval_seconds=env_float("PULSE_INTERVAL_SECONDS", 3.0),
             buy_volume=env_float("PULSE_BUY_VOLUME", 0.0001),
         )
+    elif strategy_type == "DCA":
+        return FeeAwareStatArbStrategy(
+            strategy_name=os.getenv("DCA_STRATEGY_NAME", "dca_v1"),
+            event_engine=event_engine,
+            vt_symbol=vt_symbol,
+            ema_alpha=env_float("DCA_EMA_ALPHA", 0.005),
+            taker_fee=env_float("DCA_TAKER_FEE", 0.0004),
+            target_profit_rate=env_float("DCA_TARGET_PROFIT_RATE", 0.0002),
+            dca_step_rate=env_float("DCA_STEP_RATE", 0.0015),
+            stop_loss_rate=env_float("DCA_STOP_LOSS_RATE", 0.02),
+            trade_volume=env_float("DCA_TRADE_VOLUME", 1.0),
+            max_position=env_float("DCA_MAX_POSITION", 5.0),
+        )
     return GridStrategy(
         strategy_name=os.getenv("GRID_STRATEGY_NAME", "grid_v1"),
         event_engine=event_engine,
@@ -240,9 +291,10 @@ def build_strategy(event_engine: EventEngine, symbol: str, exchange_name: str):
 
 
 def main() -> None:
+    setup_logging()
     load_env_file()
     event_engine, gateway, cep_engine = build_system()
-    print(f"当前运行模式: {gateway.exchange.value}")
+    logger.info(f"当前运行模式: {gateway.exchange.value}")
     register_log_handlers(event_engine)
     event_engine.start()
     try:
@@ -252,8 +304,10 @@ def main() -> None:
         raise RuntimeError(f"连接网关失败: {exc}") from exc
     symbol = os.getenv("TRADING_SYMBOL", "BTCUSDT")
     gateway.subscribe(symbol)
-    strategy = build_strategy(event_engine=event_engine, symbol=symbol, exchange_name=gateway.exchange.value)
-    print(f"当前策略: {strategy.strategy_name}")
+    strategy = build_strategy(
+        event_engine=event_engine, symbol=symbol, exchange_name=gateway.exchange.value
+    )
+    logger.info(f"当前策略: {strategy.strategy_name}")
     cep_engine.add_strategy(strategy)
     cep_engine.start()
     use_gui = bool_env("ENABLE_GUI", True)

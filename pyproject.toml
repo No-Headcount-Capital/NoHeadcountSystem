@@ -2,6 +2,13 @@
 name = "noheadcountsystem"
 version = "0.1.0"
 description = "Add your description here"
-readme = "README.md"
+readme = "使用指南.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "ccxt>=4.5.49",
+    "dotenv>=0.9.9",
+    "numba>=0.65.0",
+    "numpy>=2.4.4",
+    "pandas>=3.0.2",
+    "requests>=2.33.1",
+]
