@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import ccxt
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
@@ -129,24 +130,17 @@ class BacktestDCAStrategy:
                 exchange.place_market_order(-self.trade_volume)
 
 
-def get_or_fetch_data():
+def get_or_fetch_data(file_path: str | Path = "data/test.parquet"):
     data_dir = Path("data")
     data_dir.mkdir(exist_ok=True)
-    file_path = data_dir / "btc_usdt_1mon.csv"
-
+    # file_path = data_dir / "BTCUSDT_1m_20170817_20260420.parquet"
+    file_path = Path(file_path)
     if file_path.exists():
         print("读取本地缓存数据...")
-        df = pd.read_csv(file_path)
+        df = pd.read_parquet(file_path)
     else:
         print("使用 ccxt 下载最近一月的 BTC/USDT 1m K线数据...")
-        exchange = ccxt.okx(
-            {
-                "proxies": {
-                    "http": "http://127.0.0.1:7897",
-                    "https": "http://127.0.0.1:7897",
-                }
-            }
-        )
+        exchange = ccxt.okx()
         since = exchange.milliseconds() - 60 * 24 * 60 * 60 * 1000
         all_ohlcv = []
         while since < exchange.milliseconds():
@@ -166,7 +160,7 @@ def get_or_fetch_data():
     closes = df["close"].values.astype(np.float64)
     n = len(df)
     signals = np.zeros(n, dtype=np.float64)
-    signal_flags = np.zeros(n, dtype=np.int32)
+    signal_flags = np.ones(n, dtype=np.int32)
     extras = np.zeros((n, 1), dtype=np.float64)
 
     return opens, highs, lows, closes, signals, signal_flags, extras
@@ -214,8 +208,57 @@ if __name__ == "__main__":
     )
 
     print("回测结束。结果：")
-    print(f"初始资金: {results[0].balance}")
-    print(f"实现盈亏: {results[0].realized_total_pnl:.2f}")
-    print(f"交易额: {results[0].turnover:.2f}")
-    print(f"结束持仓: {results[0].position}")
-    print(f"平仓笔数: {len(results[0].realized_trade_pnls)}")
+
+    exchange = results[0]
+    pnls = results[1]
+
+    initial_balance = 10000.0
+    equity_curve = initial_balance + pnls
+
+    # 指标计算
+    if len(equity_curve) > 0:
+        total_years = len(equity_curve) / (365.25 * 24 * 60)
+        total_return = (equity_curve[-1] - initial_balance) / initial_balance
+        annual_return = (
+            (1 + total_return) ** (1 / total_years) - 1 if total_years > 0 else 0.0
+        )
+
+        returns = np.diff(equity_curve) / equity_curve[:-1]
+        annual_volatility = np.std(returns) * np.sqrt(365.25 * 24 * 60)
+        sharpe_ratio = (
+            annual_return / annual_volatility if annual_volatility > 0 else 0.0
+        )
+
+        cummax = np.maximum.accumulate(equity_curve)
+        drawdowns = (cummax - equity_curve) / cummax
+        max_drawdown = np.max(drawdowns)
+    else:
+        annual_return = 0.0
+        annual_volatility = 0.0
+        sharpe_ratio = 0.0
+        max_drawdown = 0.0
+
+    print(f"初始资金: {exchange.balance}")
+    print(f"实现盈亏: {exchange.realized_total_pnl:.2f}")
+    print(f"交易额: {exchange.turnover:.2f}")
+    print(f"结束持仓: {exchange.position}")
+    print(f"平仓笔数: {len(exchange.realized_trade_pnls)}")
+    print("-" * 30)
+    print(f"年化收益率: {annual_return * 100:.2f}%")
+    print(f"年化波动率: {annual_volatility * 100:.2f}%")
+    print(f"夏普比率: {sharpe_ratio:.2f}")
+    print(f"最大回撤: {max_drawdown * 100:.2f}%")
+
+    # 绘制净值曲线
+    if len(equity_curve) > 0:
+        plt.figure(figsize=(12, 6))
+        plt.plot(equity_curve, label="Equity Curve")
+        plt.title("Backtest Equity Curve")
+        plt.xlabel("Time (1m bars)")
+        plt.ylabel("Equity (USDT)")
+        plt.grid(True)
+        plt.legend()
+
+        output_file = "./data/equity_curve.png"
+        plt.savefig(output_file)
+        print(f"\n净值曲线已保存至: {output_file}")
