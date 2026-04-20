@@ -134,6 +134,33 @@
     \end{itemize}
 \end{frame}
 
+\begin{frame}{Arbitrage Strategy Results}
+    \begin{columns}
+        \begin{column}{0.55\textwidth}
+            \textbf{In-Sample Equity Curve}
+            \begin{figure}[htpb]
+                \centering
+                \includegraphics[width=\linewidth]{pic/equity_curve.png}
+            \end{figure}
+        \end{column}
+        \begin{column}{0.45\textwidth}
+            \textbf{Out-of-Sample Metrics}
+            \begin{itemize}
+                \item Initial Capital: 10000.0
+                \item Realized PnL: 66.20
+                \item Turnover: 9770.01
+                \item End Position: 0.0
+                \item Closed Trades: 8
+                \vspace{0.2cm}
+                \item \textbf{Annualized Return}: 0.66\%
+                \item \textbf{Annualized Volatility}: 0.47\%
+                \item \textbf{Sharpe Ratio}: 1.42
+                \item \textbf{Max Drawdown}: 0.37\%
+            \end{itemize}
+        \end{column}
+    \end{columns}
+\end{frame}
+
 \section{Risk Management}
 
 \begin{frame}{Risk Management Center (RMS)}
@@ -170,15 +197,14 @@
 
 \begin{frame}{Dashboard \& GUI}
     \begin{itemize}
-        \item \textbf{Graphical User Interface}: Built via \texttt{order\_monitor.py} to provide intuitive operational status.
-        \item \textbf{Core Functions}:
-        \begin{itemize}
-            \item \textbf{Real-time Metrics}: Overview of order volume, fills, and rejections.
-            \item \textbf{Dynamic Grids}: Tracks order lifecycles, trade reports, and tick streaming.
-            \item \textbf{Event Timeline}: Visual log display of system events for easy debugging.
-        \end{itemize}
+        \item \textbf{GUI Monitor}: Real-time metrics, dynamic grids for orders/trades/ticks, and event timeline tracking.
         \item \textit{Supports headless mode (\texttt{ENABLE\_GUI=0}) for cloud server deployment.}
     \end{itemize}
+    \vspace{-0.2cm}
+    \begin{figure}[htpb]
+        \centering
+        \includegraphics[width=0.95\linewidth]{pic/gui.png}
+    \end{figure}
 \end{frame}
 
 \begin{frame}{Quick Start}
